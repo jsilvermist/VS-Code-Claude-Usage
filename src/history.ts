@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { withConfigDirSuffix } from "./configDir.js";
+import { withAccountSuffix } from "./configDir.js";
 import type { HistoryEntry } from "./types.js";
 
 /**
@@ -8,7 +8,7 @@ import type { HistoryEntry } from "./types.js";
  * own history file. The default config dir keeps the original file name.
  */
 export function getHistoryFileName(configDir: string | undefined): string {
-  return `${withConfigDirSuffix("usage-history", configDir)}.json`;
+  return `${withAccountSuffix("usage-history", configDir)}.json`;
 }
 
 export interface HistoryDependencies {

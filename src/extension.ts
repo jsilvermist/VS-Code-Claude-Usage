@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { fetchUsage } from "./api";
 import { isCacheFresh, readCache, writeCache } from "./cache";
 import { CLAUDE_CODE_ENVIRONMENT_SETTING, CLAUDE_CODE_PROCESS_WRAPPER_SETTING, COMMANDS, CONFIG_PATHS, getClaudeConfigDir, getClaudeUsageSetting } from "./config";
-import { withConfigDirSuffix } from "./configDir";
+import { withAccountSuffix } from "./configDir";
 import { getAccessToken } from "./credentials";
 import { EMPTY_FORECAST_PROFILE, getWeeklyForecast, updateForecastProfile, type ForecastProfile } from "./forecast";
 import { getHistoryFileName, HistoryStore } from "./history";
@@ -77,7 +77,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   }
 
   let state: State = { kind: "loading" };
-  const forecastProfileKey = () => withConfigDirSuffix("weeklyForecastProfile.v1", configDir);
+  const forecastProfileKey = () => withAccountSuffix("weeklyForecastProfile.v1", configDir);
 
   function loadForecastProfile(): ForecastProfile {
     const profile = updateForecastProfile(

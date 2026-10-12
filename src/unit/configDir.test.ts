@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { applyClaudeCodeEnvironment, parseClaudeCodeEnvironmentVariables, resolveCredentialsConfigDir, withConfigDirSuffix } from "../configDir";
+import { applyClaudeCodeEnvironment, parseClaudeCodeEnvironmentVariables, resolveCredentialsConfigDir, withAccountSuffix, withConfigDirSuffix } from "../configDir";
 
 test("resolveCredentialsConfigDir falls back to CLAUDE_CONFIG_DIR when CLAUDE_SECURESTORAGE_CONFIG_DIR is unset", () => {
   assert.equal(resolveCredentialsConfigDir({ CLAUDE_CONFIG_DIR: "/custom/claude" }), "/custom/claude");
@@ -45,6 +45,19 @@ test("withConfigDirSuffix keeps the bare name for the default config dir", () =>
 
 test("withConfigDirSuffix uses the same hash as the config-dir-suffixed keychain entry", () => {
   assert.equal(withConfigDirSuffix("Claude Code-credentials", "/custom/claude"), "Claude Code-credentials-7427f042");
+});
+
+test("withAccountSuffix keeps the bare name for the default config dir", () => {
+  assert.equal(withAccountSuffix("usage-history", undefined, "/home/test"), "usage-history");
+});
+
+test("withAccountSuffix keeps the bare name when the config dir points at ~/.claude explicitly", () => {
+  assert.equal(withAccountSuffix("usage-history", "/home/test/.claude", "/home/test"), "usage-history");
+  assert.equal(withAccountSuffix("usage-history", "/home/test/.claude/", "/home/test"), "usage-history");
+});
+
+test("withAccountSuffix uses the config dir hash for any other dir", () => {
+  assert.equal(withAccountSuffix("usage-history", "/custom/claude", "/home/test"), "usage-history-7427f042");
 });
 
 // ─── claudeCode.environmentVariables (mirrors Claude Code 2.1.296) ─────────────

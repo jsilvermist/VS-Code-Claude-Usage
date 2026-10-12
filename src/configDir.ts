@@ -1,4 +1,5 @@
 import { createHash } from "crypto";
+import * as os from "os";
 import * as path from "path";
 
 /**
@@ -12,6 +13,19 @@ export function withConfigDirSuffix(name: string, configDir: string | undefined)
 
   const suffix = createHash("sha256").update(configDir.normalize("NFC")).digest("hex").slice(0, 8);
   return `${name}-${suffix}`;
+}
+
+/**
+ * Names this extension's per-account storage (usage history, forecast profile) after the config dir.
+ * Unlike the Keychain names, a config dir that resolves to the default ~/.claude keeps the bare name,
+ * so setting CLAUDE_CONFIG_DIR to the default dir explicitly doesn't start a new history.
+ */
+export function withAccountSuffix(name: string, configDir: string | undefined, homedir = os.homedir()): string {
+  if (!configDir || path.resolve(configDir) === path.resolve(homedir, ".claude")) {
+    return name;
+  }
+
+  return withConfigDirSuffix(name, configDir);
 }
 
 /**
