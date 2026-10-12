@@ -126,13 +126,19 @@ export function activate(ctx: vscode.ExtensionContext) {
     dispatch({ type: "refresh-started" });
 
     const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
+    // A config dir change during an await makes this refresh stale: its results belong to the previous
+    // account, and the change already started a forced refresh for the new one.
     const refreshConfigDir = configDir;
+    const isStale = () => configDir !== refreshConfigDir;
     const cached = readCache(refreshConfigDir);
     if (!force && cached && isCacheFresh(cached, intervalSeconds)) {
       const ageSeconds = Math.round((Date.now() - cached.fetchedAt) / 1000);
       log.debug(`Cache hit (${ageSeconds}s old) — skipping API call`);
       forecastProfile = updateForecastProfile(forecastProfile, [toHistoryEntry(cached.data, cached.fetchedAt)], refreshStartedAt, onIncompleteForecastWeek);
       await ctx.globalState.update(forecastProfileKey(), forecastProfile);
+      if (isStale()) {
+        return;
+      }
       const forecast = getWeeklyForecast(cached.data, refreshStartedAt, forecastProfile);
       historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), forecast);
       dispatch({
@@ -156,7 +162,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
     try {
       const usage = await fetchUsage(token);
-      if (configDir !== refreshConfigDir) {
+      if (isStale()) {
         log.debug("Config dir changed during fetch — discarding the previous account's usage");
         return;
       }
@@ -168,6 +174,9 @@ export function activate(ctx: vscode.ExtensionContext) {
       // Appended before the await below, so a config dir change during it can't redirect the entry.
       historyStore.append(entry);
       await ctx.globalState.update(forecastProfileKey(), forecastProfile);
+      if (isStale()) {
+        return;
+      }
       const forecast = getWeeklyForecast(usage, entry.timestamp, forecastProfile);
       historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), forecast);
       dispatch({
@@ -180,6 +189,9 @@ export function activate(ctx: vscode.ExtensionContext) {
         },
       });
     } catch (e) {
+      if (isStale()) {
+        return;
+      }
       log.error(`Unexpected error during fetch: ${String(e)}`);
       dispatch({ type: "fetch-error", message: String(e) });
     }
