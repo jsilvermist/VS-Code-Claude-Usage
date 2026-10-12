@@ -167,7 +167,8 @@ export function activate(ctx: vscode.ExtensionContext) {
           log.info(`Claude config dir changed — ${configDir ?? "default"}`);
           forecastProfile = loadForecastProfile();
           historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), null);
-          refresh(true);
+          // Not forced: the cache is per config dir, so a fresh entry for this account can be reused.
+          refresh();
         }
       }
       if (e.affectsConfiguration(CONFIG_PATHS.warningThreshold) || e.affectsConfiguration(CONFIG_PATHS.dangerThreshold)) {
