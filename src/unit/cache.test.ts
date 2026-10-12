@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { CacheDependencies, CacheEntry, FRESHNESS_TOLERANCE_MS, getCacheFilePath, isCacheFresh, readCacheWithDependencies, writeCacheWithDependencies } from "../cache";
-import { resolveCredentialsConfigDir } from "../credentials";
+import { resolveCredentialsConfigDir } from "../configDir";
 import type { UsageResponse } from "../types";
 
 const sampleUsage: UsageResponse = {

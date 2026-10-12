@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { withConfigDirSuffix } from "./credentials.js";
+import { withConfigDirSuffix } from "./configDir.js";
 import type { HistoryEntry } from "./types.js";
 
 /**

@@ -1,5 +1,5 @@
 import * as vscode from "vscode";
-import { applyClaudeCodeEnvironment, resolveCredentialsConfigDir, type ClaudeCodeEnvironmentVariable } from "./credentials";
+import { applyClaudeCodeEnvironment, resolveCredentialsConfigDir, type ClaudeCodeEnvironmentVariable } from "./configDir";
 
 export const CONFIG_SECTION = "claudeUsage" as const;
 
