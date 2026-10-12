@@ -1,14 +1,13 @@
 import * as vscode from "vscode";
 import { fetchUsage } from "./api";
-import { isCacheFresh, readCache, writeCache } from "./cache";
+import { readCache, writeCache } from "./cache";
 import { CLAUDE_CODE_ENVIRONMENT_SETTING, CLAUDE_CODE_PROCESS_WRAPPER_SETTING, COMMANDS, CONFIG_PATHS, getClaudeConfigDir, getClaudeUsageSetting } from "./config";
 import { withAccountSuffix } from "./configDir";
 import { getAccessToken } from "./credentials";
-import { EMPTY_FORECAST_PROFILE, getWeeklyForecast, updateForecastProfile, type ForecastProfile } from "./forecast";
+import { EMPTY_FORECAST_PROFILE, updateForecastProfile, type ForecastProfile } from "./forecast";
 import { getHistoryFileName, HistoryStore } from "./history";
-import { getScopedWeeklyLimits } from "./scopedLimits";
+import { refreshUsage } from "./refresh";
 import { Action, BarProps, State, forecastStateToBarProps, reduce, stateToBarProps } from "./statusBar";
-import type { HistoryEntry, UsageResponse } from "./types";
 import { UsageHistoryProvider } from "./webviewProvider";
 
 function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
@@ -29,19 +28,6 @@ function applyProps(props: BarProps, bar: vscode.StatusBarItem): void {
   } else {
     bar.show();
   }
-}
-
-function toHistoryEntry(usage: UsageResponse, timestamp: number): HistoryEntry {
-  return {
-    timestamp,
-    five_hour: usage.five_hour?.utilization ?? null,
-    five_hour_resets_at: usage.five_hour?.resets_at ?? null,
-    seven_day: usage.seven_day?.utilization ?? null,
-    seven_day_resets_at: usage.seven_day?.resets_at ?? null,
-    scoped_weekly: getScopedWeeklyLimits(usage),
-    extra_used: usage.extra_usage?.used_credits ?? null,
-    extra_limit: usage.extra_usage?.monthly_limit ?? null,
-  };
 }
 
 // ─── Extension lifecycle ──────────────────────────────────────────────────────
@@ -121,85 +107,40 @@ export function activate(ctx: vscode.ExtensionContext) {
     }),
   );
 
-  async function refresh(force = false) {
-    const refreshStartedAt = Date.now();
-    dispatch({ type: "refresh-started" });
-
-    const intervalSeconds = getClaudeUsageSetting("refreshIntervalSeconds");
-    // A config dir change during an await makes this refresh stale: its results belong to the previous
-    // account, and the change already started a forced refresh for the new one.
-    const refreshConfigDir = configDir;
-    const isStale = (step: string) => {
-      const stale = configDir !== refreshConfigDir;
-      if (stale) {
-        log.debug(`Config dir changed during ${step} — discarding the previous account's refresh`);
-      }
-      return stale;
-    };
-    const cached = readCache(refreshConfigDir);
-    if (!force && cached && isCacheFresh(cached, intervalSeconds)) {
-      const ageSeconds = Math.round((Date.now() - cached.fetchedAt) / 1000);
-      log.debug(`Cache hit (${ageSeconds}s old) — skipping API call`);
-      forecastProfile = updateForecastProfile(forecastProfile, [toHistoryEntry(cached.data, cached.fetchedAt)], refreshStartedAt, onIncompleteForecastWeek);
-      await ctx.globalState.update(forecastProfileKey(), forecastProfile);
-      if (isStale("cache hit")) {
-        return;
-      }
-      const forecast = getWeeklyForecast(cached.data, refreshStartedAt, forecastProfile);
-      historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), forecast);
-      dispatch({
-        type: "fetch-success",
-        usage: cached.data,
-        forecast,
-        thresholds: {
-          warning: getClaudeUsageSetting("warningThreshold"),
-          danger: getClaudeUsageSetting("dangerThreshold"),
+  function refresh(force = false): Promise<void> {
+    return refreshUsage(
+      {
+        getConfigDir: () => configDir,
+        readCache,
+        writeCache,
+        getAccessToken,
+        fetchUsage,
+        getForecastProfile: () => forecastProfile,
+        saveForecastProfile: (profile) => {
+          forecastProfile = profile;
+          return ctx.globalState.update(forecastProfileKey(), profile);
         },
-      });
-      return;
-    }
-
-    log.debug("Cache missing or stale — fetching from API");
-    const token = getAccessToken(refreshConfigDir);
-    if (!token) {
-      log.warn("No valid access token found — run `claude /login` to sign in");
-      dispatch({ type: "no-token" });
-      return;
-    }
-    try {
-      const usage = await fetchUsage(token);
-      if (isStale("fetch")) {
-        return;
-      }
-      writeCache(usage, refreshConfigDir, refreshStartedAt);
-      log.info("Usage fetched successfully");
-      const entry = toHistoryEntry(usage, Date.now());
-      forecastProfile = updateForecastProfile(forecastProfile, [entry], entry.timestamp, onIncompleteForecastWeek);
-      // Persist reset metadata alongside utilization so the history view can derive markers and forecasts later.
-      // Appended before the await below, so a config dir change during it can't redirect the entry.
-      historyStore.append(entry);
-      await ctx.globalState.update(forecastProfileKey(), forecastProfile);
-      if (isStale("forecast update")) {
-        return;
-      }
-      const forecast = getWeeklyForecast(usage, entry.timestamp, forecastProfile);
-      historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), forecast);
-      dispatch({
-        type: "fetch-success",
-        usage,
-        forecast,
-        thresholds: {
-          warning: getClaudeUsageSetting("warningThreshold"),
-          danger: getClaudeUsageSetting("dangerThreshold"),
+        appendHistory: (entry) => historyStore.append(entry),
+        showUsage: (usage, forecast) => {
+          historyProvider.refresh(historyStore.read(), getClaudeUsageSetting("showUsed"), getHistoryViewSettings(), forecast);
+          dispatch({
+            type: "fetch-success",
+            usage,
+            forecast,
+            thresholds: {
+              warning: getClaudeUsageSetting("warningThreshold"),
+              danger: getClaudeUsageSetting("dangerThreshold"),
+            },
+          });
         },
-      });
-    } catch (e) {
-      if (isStale("failed fetch")) {
-        return;
-      }
-      log.error(`Unexpected error during fetch: ${String(e)}`);
-      dispatch({ type: "fetch-error", message: String(e) });
-    }
+        dispatch,
+        getRefreshIntervalSeconds: () => getClaudeUsageSetting("refreshIntervalSeconds"),
+        onIncompleteForecastWeek,
+        log,
+        now: () => Date.now(),
+      },
+      force,
+    );
   }
 
   function startTimer() {
