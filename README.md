@@ -59,6 +59,8 @@ You must be logged in to Claude Code (`claude /login`). The extension reads your
 
 Claude Code launched in a terminal (`claudeCode.useTerminal`) uses the shell's environment instead, which the extension can't see.
 
+In remote windows (WSL, SSH, containers), add the setting to the remote settings (**Preferences: Open Remote Settings (JSON)**). VS Code ignores it in the local user settings there, because it is a machine-scoped setting.
+
 Usage history and the weekly forecast are kept separately for each config dir, so accounts don't mix in the History panel.
 
 ## Settings
