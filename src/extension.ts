@@ -129,14 +129,20 @@ export function activate(ctx: vscode.ExtensionContext) {
     // A config dir change during an await makes this refresh stale: its results belong to the previous
     // account, and the change already started a forced refresh for the new one.
     const refreshConfigDir = configDir;
-    const isStale = () => configDir !== refreshConfigDir;
+    const isStale = (step: string) => {
+      const stale = configDir !== refreshConfigDir;
+      if (stale) {
+        log.debug(`Config dir changed during ${step} — discarding the previous account's refresh`);
+      }
+      return stale;
+    };
     const cached = readCache(refreshConfigDir);
     if (!force && cached && isCacheFresh(cached, intervalSeconds)) {
       const ageSeconds = Math.round((Date.now() - cached.fetchedAt) / 1000);
       log.debug(`Cache hit (${ageSeconds}s old) — skipping API call`);
       forecastProfile = updateForecastProfile(forecastProfile, [toHistoryEntry(cached.data, cached.fetchedAt)], refreshStartedAt, onIncompleteForecastWeek);
       await ctx.globalState.update(forecastProfileKey(), forecastProfile);
-      if (isStale()) {
+      if (isStale("cache hit")) {
         return;
       }
       const forecast = getWeeklyForecast(cached.data, refreshStartedAt, forecastProfile);
@@ -162,8 +168,7 @@ export function activate(ctx: vscode.ExtensionContext) {
     }
     try {
       const usage = await fetchUsage(token);
-      if (isStale()) {
-        log.debug("Config dir changed during fetch — discarding the previous account's usage");
+      if (isStale("fetch")) {
         return;
       }
       writeCache(usage, refreshConfigDir, refreshStartedAt);
@@ -174,7 +179,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       // Appended before the await below, so a config dir change during it can't redirect the entry.
       historyStore.append(entry);
       await ctx.globalState.update(forecastProfileKey(), forecastProfile);
-      if (isStale()) {
+      if (isStale("forecast update")) {
         return;
       }
       const forecast = getWeeklyForecast(usage, entry.timestamp, forecastProfile);
@@ -189,7 +194,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         },
       });
     } catch (e) {
-      if (isStale()) {
+      if (isStale("failed fetch")) {
         return;
       }
       log.error(`Unexpected error during fetch: ${String(e)}`);
