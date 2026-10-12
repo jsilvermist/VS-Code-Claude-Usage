@@ -1,7 +1,7 @@
 import * as vscode from "vscode";
 import { fetchUsage } from "./api";
 import { isCacheFresh, readCache, writeCache } from "./cache";
-import { CLAUDE_CODE_ENVIRONMENT_SETTING, COMMANDS, CONFIG_PATHS, getClaudeConfigDir, getClaudeUsageSetting } from "./config";
+import { CLAUDE_CODE_ENVIRONMENT_SETTING, CLAUDE_CODE_PROCESS_WRAPPER_SETTING, COMMANDS, CONFIG_PATHS, getClaudeConfigDir, getClaudeUsageSetting } from "./config";
 import { withConfigDirSuffix } from "./configDir";
 import { getAccessToken } from "./credentials";
 import { EMPTY_FORECAST_PROFILE, getWeeklyForecast, updateForecastProfile, type ForecastProfile } from "./forecast";
@@ -50,7 +50,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   const log = vscode.window.createOutputChannel("Claude Code Usage", { log: true });
   ctx.subscriptions.push(log);
 
-  // Only the claudeCode.environmentVariables setting can change this at runtime; see the listener below.
+  // Only the Claude Code extension's settings can change this at runtime; see the listener below.
   let configDir = getClaudeConfigDir();
 
   const historyStore = new HistoryStore(
@@ -202,7 +202,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       if (e.affectsConfiguration(CONFIG_PATHS.refreshIntervalSeconds)) {
         startTimer();
       }
-      if (e.affectsConfiguration(CLAUDE_CODE_ENVIRONMENT_SETTING)) {
+      if (e.affectsConfiguration(CLAUDE_CODE_ENVIRONMENT_SETTING) || e.affectsConfiguration(CLAUDE_CODE_PROCESS_WRAPPER_SETTING)) {
         const updatedConfigDir = getClaudeConfigDir();
         if (updatedConfigDir !== configDir) {
           configDir = updatedConfigDir;
